@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.env
+.env.*
+.DS_Store
+*.local
+.claude/settings.local.json
+.claude/
+.clasp.json
+
+# 校刊原始檔與含姓名的文字稿不進 repo
+*.pdf
+*文檔彙編*.md

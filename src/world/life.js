@@ -1,0 +1,281 @@
+// 天空中的生命：雲中福星龍、飛艇、紙飛機、鳥群與藏起來的福星龍
+import * as THREE from 'three';
+import { Kit, G, makeRng } from './kit.js';
+import { C, dragonFigure, DRAGON_PINK, DRAGON_ROSE, DRAGON_BROWN } from './props.js';
+import { shared } from './materials.js';
+
+const LEAP_HEIGHT = 15;
+const LEAP_TIME = 3.4;
+const NOW = new THREE.Vector3();
+const NEXT = new THREE.Vector3();
+
+// ───────── 雲中福星龍：沿身體長軸做波動的長身小龍 ─────────
+function koiGeometry(palette) {
+  const k = new Kit(11);
+  const pts = [];
+  const prof = [[0.02, 3.2], [0.34, 2.9], [0.62, 2.1], [0.8, 1.1], [0.84, 0], [0.72, -1.2], [0.5, -2.3], [0.24, -3.2], [0.08, -3.7]];
+  prof.forEach(([r, z]) => pts.push(new THREE.Vector2(r, z)));
+  const body = new THREE.LatheGeometry(pts, 14).rotateX(Math.PI / 2).toNonIndexed();
+  const pos = body.attributes.position;
+  const col = new Float32Array(pos.count * 3);
+  const c = new THREE.Color();
+  const a = new THREE.Color(palette[0]), b = new THREE.Color(palette[1]), d = new THREE.Color(palette[2]);
+  for (let i = 0; i < pos.count; i += 3) {
+    const z = pos.getZ(i), x = pos.getX(i), y = pos.getY(i);
+    const n = Math.sin(z * 1.7 + 0.6) + Math.sin(x * 2.3 + z * 0.8);
+    c.copy(y < -0.25 ? b : n > 0.3 ? a : n < -0.9 ? d : b);
+    for (let v = 0; v < 3; v++) col.set([c.r, c.g, c.b], (i + v) * 3);
+  }
+  body.deleteAttribute('uv');
+  body.computeVertexNormals();
+  body.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  body.setAttribute('aSway', new THREE.BufferAttribute(new Float32Array(pos.count), 1));
+  k.layers.solid.push(body);
+  const fin = (x, y, z, sx, sy, sz, rx, ry, rz, hex) => k.add(G.cone(3), hex, { x, y, z, sx, sy, sz, rx, ry, rz, wonk: 0.02, ao: 1 });
+  fin(0, -0.02, -4.1, 1.05, 1.5, 0.08, -1.57, 0, 0, palette[0]);
+  // 背上一排波浪鰭
+  for (let i = 0; i < 6; i++) fin(0, 0.86 - Math.abs(i - 1.5) * 0.06, 1.8 - i * 0.9, 0.08, 0.55, 0.42, 0.25, 0, 0, palette[2]);
+  fin(1.05, -0.3, 1.1, 0.7, 0.9, 0.06, 0.2, 0, -1.2, palette[2]);
+  fin(-1.05, -0.3, 1.1, 0.7, 0.9, 0.06, 0.2, 0, 1.2, palette[2]);
+  for (const s of [-1, 1]) {
+    // 大眼睛與兩根往後彎的觸角（福星龍的招牌）
+    k.ball(0.26, '#ffffff', s * 0.5, 0.3, 2.2, { detail: 1 });
+    k.ball(0.15, '#7a2e22', s * 0.66, 0.32, 2.28, { detail: 1 });
+    k.add(G.cyl(5, 0.5), DRAGON_BROWN, { x: s * 0.22, y: 1.1, z: 1.7, sx: 0.06, sy: 1.3, sz: 0.06, rx: -0.75, rz: s * -0.2 });
+    k.ball(0.1, DRAGON_BROWN, s * 0.36, 1.62, 1.05, { detail: 1 });
+  }
+  return k;
+}
+
+const koiUniforms = { uTime: shared.uTime };
+
+function koiMaterial() {
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.05 });
+  m.onBeforeCompile = (s) => {
+    s.uniforms.uTime = koiUniforms.uTime;
+    s.uniforms.uPhase = m.userData.phase;
+    s.vertexShader = s.vertexShader
+      .replace('#include <common>', '#include <common>\nuniform float uTime; uniform float uPhase;')
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+        float w = clamp((3.4 - position.z) / 7.4, 0., 1.);
+        transformed.x += sin(position.z * .95 - uTime * 2.3 + uPhase) * w * w * 1.25;`);
+  };
+  m.customProgramCacheKey = () => 'koi';
+  return m;
+}
+
+export class Life {
+  constructor(scene, islands, calm) {
+    this.scene = scene;
+    this.calm = calm;
+    this.fish = [];
+    const palettes = [['#d9707f', '#f7dde0', '#b4505f'], ['#e58d99', '#fbecee', '#c45f6e'], ['#d9707f', '#f7dde0', '#8f3c4a'], ['#eba0aa', '#fff2f3', '#c45f6e']];
+    const paths = [
+      { rx: 118, rz: 86, y: 26, sp: 0.075, ph: 0, s: 1.25 },
+      { rx: 96, rz: 112, y: 40, sp: -0.06, ph: 2, s: 1.6 },
+      { rx: 140, rz: 104, y: 12, sp: 0.05, ph: 4, s: 1 },
+      { rx: 66, rz: 58, y: 44, sp: 0.09, ph: 1, s: 0.72 },
+    ];
+    paths.forEach((p, i) => {
+      const k = koiGeometry(palettes[i]);
+      const geo = k.build().children[0].geometry;
+      const mat = koiMaterial();
+      mat.userData.phase = { value: i * 1.7 };
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.castShadow = true;
+      mesh.scale.setScalar(p.s);
+      scene.add(mesh);
+      this.fish.push({ mesh, ...p, a: p.ph, b: p.ph, u: -1, wait: 3 + i * 3.5, spit: 0 });
+    });
+    this.w = 0;
+    this.spray = null;
+    this.buildSchool(scene);
+    this.buildPlanes(scene);
+    this.buildAirship(scene, islands);
+    this.buildHippos(scene, islands);
+  }
+
+  // 繞著主島的小魚群
+  buildSchool(scene) {
+    const k = new Kit(21);
+    k.ball(0.5, '#ffffff', 0, 0, 0, { sx: 0.34, sy: 0.5, sz: 1.1 });
+    k.add(G.cone(3), '#ffffff', { z: -0.72, rx: -1.57, sx: 0.32, sy: 0.5, sz: 0.04, wonk: 0 });
+    const geo = k.build().children[0].geometry;
+    const count = 46;
+    this.school = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5 }), count);
+    const cols = ['#ffffff', '#f7dde0', '#ffffff', '#9fd3e6'];
+    const r = makeRng(5);
+    this.schoolData = [];
+    for (let i = 0; i < count; i++) {
+      this.school.setColorAt(i, new THREE.Color(cols[i % 4]));
+      this.schoolData.push({ a: r() * 6.28, rad: 30 + r() * 10, y: 22 + r() * 8, sp: 0.2 + r() * 0.08, ph: r() * 6.28 });
+    }
+    this.school.frustumCulled = false;
+    scene.add(this.school);
+    this.dummy = new THREE.Object3D();
+  }
+
+  buildPlanes(scene) {
+    this.planes = [];
+    for (let i = 0; i < 4; i++) {
+      const k = new Kit(30 + i);
+      const verts = [0, 0.07, 0.8, -0.5, 0.14, -0.54, 0, -0.07, -0.34, 0, 0.07, 0.8, 0, -0.07, -0.34, 0.5, 0.14, -0.54];
+      const g = new THREE.BufferGeometry();
+      g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+      k.add(g, '#fbf6ea', { wonk: 0, ao: 1, jitter: 0 });
+      const m = k.build();
+      m.children[0].material = m.children[0].material.clone();
+      m.children[0].material.side = THREE.DoubleSide;
+      m.children[0].castShadow = false;
+      scene.add(m);
+      this.planes.push({ m, sp: 0.16 + i * 0.03, ph: i * 1.6, rx: 60 + i * 18, rz: 46 + i * 12, y: 18 + i * 6 });
+    }
+  }
+
+  // 繫泊在寰宇交會島的飛艇
+  buildAirship(scene, islands) {
+    const k = new Kit(41);
+    k.add(G.sphere(14, 9), '#2f8fb0', { sx: 2.3, sy: 2.3, sz: 5.4 });
+    k.add(G.sphere(14, 9), '#fff0dc', { y: -0.5, sx: 2.1, sy: 1.9, sz: 5.2 });
+    for (const s of [-1, 1]) {
+      k.add(G.cone(3), C.gold, { x: s * 2.2, z: -3.6, sx: 1.5, sy: 2, sz: 0.1, rz: -s * 1.2, rx: -0.8 });
+    }
+    k.add(G.cone(3), C.gold, { z: -6.2, rx: -1.57, sx: 2, sy: 2.4, sz: 0.1 });
+    // 機身的地球帶：寰宇交會
+    k.add(G.torus(24, 0.08), '#5a9b4e', { sx: 2.36, sy: 2.36, sz: 2.36 });
+    k.add(G.torus(24, 0.06), '#f2c94c', { z: 1.6, sx: 2.2, sy: 2.2, sz: 2.2 });
+    k.box(1.8, 0.8, 3, C.wood, 0, -3.1, 0.3);
+    k.box(2, 0.1, 3.3, C.wood2, 0, -2.36, 0.3);
+    for (const [x, z] of [[-0.8, -1], [0.8, -1], [-0.8, 1.6], [0.8, 1.6]]) k.box(0.05, 0.9, 0.05, C.ink, x, -2.3, z);
+    for (let i = 0; i < 4; i++) k.glow(0.34, 0.26, 0.05, C.win, -0.62 + i * 0.4 + 0.02, -2.76, 1.81);
+    this.airship = k.build();
+    this.airship.scale.setScalar(0.74);
+    const home = islands.brand;
+    this.airshipHome = home.group.position.clone().add(new THREE.Vector3(-1, 12.6, -2));
+    scene.add(this.airship);
+  }
+
+  // 藏在各島的福星龍
+  buildHippos(scene, islands) {
+    this.hippos = [];
+    const r = makeRng(33);
+    // 藏在看島鏡頭的背面、水裡或高處：要轉動畫面、放大找才看得到，像找彩蛋
+    // [x, y, z, 面向]；面向留空就隨機。看島時鏡頭從 +z 那一側斜看過來
+    const spots = {
+      core: [2, 2.76, -10.9], // 大樹背後，樹根伸到底的台地上
+      inquiry: [0.8, 0.05, -8.3], // 天文台背後
+      walk: [-3.8, 0.05, 1.2, Math.PI], // 夜市攤位後面，探頭看萬年溪
+      library: [3, 0.05, -6.2], // 溫心之家背後
+      teacher: [-2.2, 0.05, -5.8], // 推進工坊背後
+      results: [7.85, 0.05, -4.14], // 獎牌牆背後
+      forest: [-1.04, 0.05, -4.1], // 書屋後面
+      brand: [-0.5, 6.07, -2.5], // 飛艇繫泊塔頂的平台
+      future: [2, 0.55, -4.3], // 曙光拱門背後的石座上
+    };
+    for (const [id, [x, y, z, face]] of Object.entries(spots)) {
+      const is = islands[id];
+      if (!is) continue; // 這一期沒有這座島
+      const k = new Kit(60 + this.hippos.length);
+      dragonFigure(k, r() > 0.5 ? DRAGON_PINK : DRAGON_ROSE);
+      const m = k.build();
+      m.position.set(x, y, z);
+      const spin = r() * 6.28;
+      m.rotation.y = face ?? spin;
+      m.scale.setScalar(1.15);
+      m.userData.hippo = id;
+      is.group.add(m);
+      this.hippos.push({ id, mesh: m });
+    }
+  }
+
+  // 大雲魚的路徑，下雨時上下起伏更大，還會躍起翻滾
+  koiAt(f, a, b, u, out) {
+    const lift = u >= 0 ? Math.sin(Math.min(1, u) * Math.PI) * LEAP_HEIGHT * f.s : 0;
+    const near = 1 - this.w * 0.42; // 下雨時游近群島，全景才看得到
+    return out.set(Math.cos(a) * f.rx * near, f.y + Math.sin(b) * (4 + this.w * 7) + lift, Math.sin(a) * f.rz * near);
+  }
+
+  updateKoi(f, dt, wet) {
+    const w = this.w;
+    f.a += f.sp * dt * (1 + w * 0.9);
+    f.b += dt * (0.3 + w * 0.5);
+    f.mesh.material.userData.phase.value += dt * w * 5; // 尾巴擺得更快
+    if (f.u >= 0) {
+      f.u += dt / LEAP_TIME;
+      f.spit -= dt;
+      if (f.spit <= 0 && f.u < 1) {
+        f.spit = 0.09;
+        this.spray?.(f.mesh.position.x, f.mesh.position.y, f.mesh.position.z, 3, 3.4, 0.2);
+      }
+      if (f.u >= 1) { f.u = -1; f.wait = 7 + Math.random() * 9; }
+      return;
+    }
+    if (!wet || this.calm) return;
+    f.wait -= dt;
+    if (f.wait <= 0) f.u = 0;
+  }
+
+  // 小魚群：下雨時分成三群，螺旋上升、波浪起伏、快速衝刺
+  schoolAt(s, i, t, out) {
+    const w = this.w;
+    const a = s.a + t * s.sp;
+    const r = s.rad + Math.sin(t * 0.6 + s.ph) * 2.4;
+    const y = s.y + Math.sin(t * 1.1 + s.ph) * 1.2;
+    s.fade = 1;
+    if (w < 0.01) return out.set(Math.cos(a) * r, y, Math.sin(a) * r - 3);
+    let ra, rr, ry;
+    if (i % 3 === 0) {
+      const h = (t * 0.07 + s.ph / 6.283) % 1;
+      ra = s.a + t * 0.85;
+      rr = 12 + (1 - h) * 24;
+      ry = 8 + h * 36;
+      s.fade = Math.min(1, Math.sin(h * Math.PI) * 4);
+    } else if (i % 3 === 1) {
+      ra = a;
+      rr = r + Math.sin(a * 2) * 6;
+      ry = s.y + Math.sin(a * 4 + t * 1.6) * 9;
+    } else {
+      ra = s.a + t * s.sp * 2.6;
+      rr = s.rad + 12;
+      ry = s.y - 4 + Math.abs(Math.sin(ra * 3 + s.ph)) * 15;
+    }
+    const x = Math.cos(a) * r + (Math.cos(ra) * rr - Math.cos(a) * r) * w;
+    const z = Math.sin(a) * r + (Math.sin(ra) * rr - Math.sin(a) * r) * w;
+    return out.set(x, y + (ry - y) * w, z - 3);
+  }
+
+  update(t, dt, wet) {
+    this.w += ((wet ? 1 : 0) - this.w) * (1 - Math.exp(-dt * 0.9));
+    for (const f of this.fish) {
+      this.updateKoi(f, dt, wet);
+      this.koiAt(f, f.a, f.b, f.u, NOW);
+      this.koiAt(f, f.a + 0.02 * Math.sign(f.sp), f.b + 0.03, f.u >= 0 ? f.u + 0.02 : -1, NEXT);
+      f.mesh.position.copy(NOW);
+      f.mesh.lookAt(NEXT);
+      if (f.u >= 0) f.mesh.rotateZ(f.u * 6.283);
+    }
+    const d = this.dummy;
+    this.schoolData.forEach((s, i) => {
+      this.schoolAt(s, i, t, NOW);
+      this.schoolAt(s, i, t + 0.06, NEXT);
+      d.position.copy(NOW);
+      d.lookAt(NEXT);
+      d.rotateZ(Math.sin(t * 3 + s.ph) * 0.2);
+      d.scale.setScalar((1.2 + this.w * 0.9) * (1 - this.w + this.w * s.fade));
+      d.updateMatrix();
+      this.school.setMatrixAt(i, d.matrix);
+    });
+    this.school.instanceMatrix.needsUpdate = true;
+    for (const p of this.planes) {
+      const a = t * p.sp + p.ph;
+      const pos = new THREE.Vector3(Math.cos(a) * p.rx, p.y + Math.sin(a * 2) * 5, Math.sin(a) * p.rz);
+      p.m.position.copy(pos);
+      p.m.lookAt(Math.cos(a + 0.03) * p.rx, p.y + Math.sin((a + 0.03) * 2) * 5, Math.sin(a + 0.03) * p.rz);
+      p.m.rotateZ(Math.sin(a * 2) * 0.4);
+    }
+    this.airship.position.copy(this.airshipHome).add(new THREE.Vector3(Math.sin(t * 0.28) * 1.2, Math.sin(t * 0.6) * 0.6, 0));
+    this.airship.rotation.y = -0.6 + Math.sin(t * 0.2) * 0.16;
+    this.airship.rotation.z = Math.sin(t * 0.4) * 0.03;
+
+  }
+}
