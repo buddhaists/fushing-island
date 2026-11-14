@@ -8,7 +8,7 @@ import { sheet } from './ui/sheet.js';
 import { ISLANDS, SCHOOL, HIPPOS } from './data/site.js';
 import { QUIZ } from './data/issues/18/quiz.js';
 import { drawCert, validNick } from './ui/fs-cert.js';
-import { countVisit } from './ui/visits.js';
+import { countVisit, track } from './ui/visits.js';
 import { ISSUE, PHOTOS, piece } from './data/issues/18/index.js';
 import { ruby } from './data/zhuyin.js';
 
@@ -94,6 +94,7 @@ $('#app').innerHTML = `
   <footer class="site-footer"><div class="wrap"><div class="footer-bottom">
     <p>${esc(SCHOOL.name)}｜《文藝復興》第 ${ISSUE.no} 期｜${esc(ISSUE.date)}</p>
     <p>${esc(SCHOOL.address)}</p>
+    <p class="fs-privacy">本站只統計匿名的使用次數（人數、裝置類型、來源、時段與闖關次數），不蒐集姓名或任何個人資料；闖關進度與證書暱稱只存在你自己的裝置。</p>
     <p class="visit-line" data-visit-line hidden>今日 <b data-visit="today">0</b> 人・累計 <b data-visit="total">0</b> 人</p>
   </div></div></footer>
 </section>
@@ -221,6 +222,7 @@ function answer(id, i) {
     return;
   }
   S.stamps.add(id);
+  track('答對', byId[id].name);
   store.set('fs-stamps', [...S.stamps]);
   music.sfx('correct');
   music.sfx('stamp');
@@ -231,6 +233,7 @@ function answer(id, i) {
   }
   paintQuiz();
   if (S.stamps.size === TOTAL) {
+    track('闖關', '集滿印章');
     toast('九枚印章全部集滿了！可以領福星龍學習證書囉');
     if (world) world.party(9);
     music.sfx('cheer');
@@ -311,6 +314,7 @@ async function showCert(nick) {
   S.nick = nick;
   store.set('fs-nick', nick);
   openModal(`${dialogHead('福星龍學習證書')}<div class="dialog-body"><p class="fs-note">證書製作中…</p></div>`);
+  track('闖關', '領取證書');
   const url = await drawCert({ nick, islands: ISLANDS, dragons: S.dragons.size, total: TOTAL, school: SCHOOL.name, issue: ISSUE.no });
   openModal(`${dialogHead('福星龍學習證書')}<div class="dialog-body">
     <img class="fs-cert-img" src="${url}" alt="福星龍學習證書：頒給 ${esc(nick)}">
@@ -354,6 +358,7 @@ function openIsland(id, { fly = true, push = true } = {}) {
   if (S.listing) setList(false, false);
   const d = byId[id];
   S.island = id;
+  track('島嶼', d.name);
   const panel = $('#panel');
   panel.style.setProperty('--c', d.color);
   $('#pKicker').textContent = d.kicker;
