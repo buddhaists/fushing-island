@@ -540,6 +540,8 @@ function rollTo(el, n) {
     if (k < 1) requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
+  // 保底：分頁在背景時動畫不會跑，時間到就直接寫上最終數字
+  setTimeout(() => { el.textContent = n.toLocaleString(); }, dur + 300);
 }
 
 async function showVisits() {
