@@ -8,6 +8,7 @@ import { sheet } from './ui/sheet.js';
 import { ISLANDS, SCHOOL, HIPPOS } from './data/site.js';
 import { QUIZ } from './data/issues/18/quiz.js';
 import { drawCert, validNick } from './ui/fs-cert.js';
+import { countVisit } from './ui/visits.js';
 import { ISSUE, PHOTOS, piece } from './data/issues/18/index.js';
 import { ruby } from './data/zhuyin.js';
 
@@ -50,7 +51,7 @@ $('#app').innerHTML = `
 <header class="topbar">
   <button class="brand card" data-act="home" aria-label="回到浮空島全景">
     <img src="./mascot/logo-fushing.png" alt="福星龍" width="50" height="50">
-    <span><h1>福星龍浮空島</h1><p>《文藝復興》第 ${ISSUE.no} 期｜九座島，九段復興故事</p></span>
+    <span><h1>福星龍浮空島</h1><p>《文藝復興》第 ${ISSUE.no} 期｜九座島，九段復興故事</p><p class="visit-line" id="visitLine" hidden>今日 <b data-visit="today">0</b> 人・累計 <b data-visit="total">0</b> 人</p></span>
   </button>
 </header>
 
@@ -93,6 +94,7 @@ $('#app').innerHTML = `
   <footer class="site-footer"><div class="wrap"><div class="footer-bottom">
     <p>${esc(SCHOOL.name)}｜《文藝復興》第 ${ISSUE.no} 期｜${esc(ISSUE.date)}</p>
     <p>${esc(SCHOOL.address)}</p>
+    <p class="visit-line" data-visit-line hidden>今日 <b data-visit="today">0</b> 人・累計 <b data-visit="total">0</b> 人</p>
   </div></div></footer>
 </section>
 
@@ -527,6 +529,27 @@ function route() {
 }
 window.addEventListener('popstate', route);
 
+// ───────── 拜訪人數 ─────────
+// 數字從 0 滾到目前人數；偏好減少動態效果的人直接顯示
+function rollTo(el, n) {
+  if (calm) { el.textContent = n.toLocaleString(); return; }
+  const t0 = performance.now(), dur = 1200;
+  const tick = (now) => {
+    const k = Math.min(1, (now - t0) / dur);
+    el.textContent = Math.round(n * (1 - Math.pow(1 - k, 3))).toLocaleString();
+    if (k < 1) requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
+}
+
+async function showVisits() {
+  const v = await countVisit();
+  if (!v) return;
+  $$('[data-visit="today"]').forEach((el) => rollTo(el, v.today));
+  $$('[data-visit="total"]').forEach((el) => rollTo(el, v.total));
+  $$('#visitLine, [data-visit-line]').forEach((el) => { el.hidden = false; });
+}
+
 // ───────── 啟動 ─────────
 function finishLoading() {
   const l = $('#loader');
@@ -537,6 +560,7 @@ function finishLoading() {
 
 async function boot() {
   initUpdate();
+  showVisits();
   sheet.init($('#panel'), isMobile, onSheet);
   // 音樂與音效預設靜音，訪客自己打開才播放
   music.init({

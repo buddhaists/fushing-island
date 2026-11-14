@@ -10,6 +10,8 @@ export const SCHOOL = {
   issueDate: '民國 115 年 6 月 15 日',
   address: '屏東縣屏東市復興路 376 號',
   site: '',
+  // 拜訪人數：Google Apps Script 網頁應用程式的網址（部署 gas/Code.gs 後貼上，結尾是 /exec）；留空就不顯示人數
+  counterUrl: 'https://script.google.com/macros/s/AKfycbxg-cNyr1o4HYnt3HKIrfcv2heGLeiGc_UobxHziVUyzjIiOqWRu4deeVLoMDt4clUkQQ/exec',
 };
 
 const ring = (deg, rx, rz) => [Math.cos((deg * Math.PI) / 180) * rx, Math.sin((deg * Math.PI) / 180) * rz];
