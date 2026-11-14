@@ -2,7 +2,7 @@
   "name": "fushing-island",
   "private": true,
   "version": "1.0.0",
-  "releaseNotes": "復興浮空島第 18 期上線：九座島、福星龍闖關與學習證書",
+  "releaseNotes": "福星龍浮空島第 18 期上線：九座島、福星龍闖關與學習證書",
   "type": "module",
   "scripts": {
     "dev": "vite",

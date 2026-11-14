@@ -92,7 +92,7 @@ export async function drawCert({ nick, islands, dragons, total, school, issue })
   g.fillText(`福星龍圖鑑：找到 ${dragons} / ${total} 隻`, W / 2, 935);
 
   g.font = `500 28px ${BODY}`;
-  g.fillText(`${school}｜復興浮空島`, W / 2, 1010);
+  g.fillText(`${school}｜福星龍浮空島`, W / 2, 1010);
   g.fillText(rocDate(), W / 2, 1052);
 
   return c.toDataURL('image/png');

@@ -1,4 +1,4 @@
-// 浮空島的地標與擺設（復興浮空島沿用其中九座並改造）。每座回傳靜態場景，並登記互動定位點與動態零件
+// 浮空島的地標與擺設（福星龍浮空島沿用其中九座並改造）。每座回傳靜態場景，並登記互動定位點與動態零件
 import * as THREE from 'three';
 import { Kit, G } from './kit.js';
 import { makeBase, floatingRock, outline } from './base.js';

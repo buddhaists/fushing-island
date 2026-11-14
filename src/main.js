@@ -50,7 +50,7 @@ $('#app').innerHTML = `
 <header class="topbar">
   <button class="brand card" data-act="home" aria-label="回到浮空島全景">
     <img src="./mascot/logo-fushing.png" alt="福星龍" width="50" height="50">
-    <span><h1>復興浮空島</h1><p>《文藝復興》第 ${ISSUE.no} 期｜九座島，九段復興故事</p></span>
+    <span><h1>福星龍浮空島</h1><p>《文藝復興》第 ${ISSUE.no} 期｜九座島，九段復興故事</p></span>
   </button>
 </header>
 
@@ -162,7 +162,8 @@ function originalHtml(ids) {
 function cardHtml(c, i, island) {
   const photos = (c.photos || []).map((k) => `<button class="fs-photo" data-act="photo" data-photo="${k}" aria-label="放大照片：${esc(PHOTOS[k] || '')}"><img src="${photoSrc(k)}" alt="${esc(PHOTOS[k] || '')}" loading="lazy"></button>`).join('');
   const orig = c.pieces?.length ? `<details class="fs-more"><summary>看原文${c.pieces.length > 1 ? `（${c.pieces.length} 篇）` : ''}</summary>${originalHtml(c.pieces)}</details>` : '';
-  return `<details class="fs-card" data-island="${island}" data-card="${c.id}" ${i === 0 ? 'open' : ''}><summary><b>${esc(c.title)}</b><small>${esc(c.from)}</small></summary>${photos ? `<div class="fs-photos">${photos}</div>` : ''}${paras(c.text)}${orig}</details>`;
+  const thumb = c.photos?.length ? `<img class="fs-thumb" src="${photoSrc(c.photos[0])}" alt="" loading="lazy">` : '';
+  return `<details class="fs-card" data-island="${island}" data-card="${c.id}" ${i === 0 ? 'open' : ''}><summary><span class="fs-sum"><b>${esc(c.title)}</b><small>${esc(c.from)}</small></span>${thumb}</summary>${photos ? `<div class="fs-photos">${photos}</div>` : ''}${paras(c.text)}${orig}</details>`;
 }
 
 // ───────── 讀完內容、答題拿章 ─────────
