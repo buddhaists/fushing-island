@@ -418,6 +418,122 @@ export class World {
     }
   }
 
+  // ───────── 第二層選單的舞台秀：地標升起光柱、地面光環旋轉、閃光環繞，再噴一陣彩紙 ─────────
+  buildShowcase() {
+    const g = new THREE.Group();
+    const add = (m) => { m.renderOrder = 4; g.add(m); return m; };
+    const glow = (color, opacity) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
+    // 光柱：上窄下寬、開口的圓錐筒，裡面再一根較亮的細柱
+    this.showBeam = add(new THREE.Mesh(new THREE.CylinderGeometry(0.35, 1.6, 16, 24, 1, true), glow('#ffffff', 0.32)));
+    this.showBeam.position.y = 8;
+    this.showCore = add(new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.4, 16, 12, 1, true), glow('#ffffff', 0.5)));
+    this.showCore.position.y = 8;
+    // 地面兩圈光環，一圈順轉、一圈逆轉
+    this.showRings = [2.2, 3.2].map((r, i) => {
+      const m = add(new THREE.Mesh(new THREE.TorusGeometry(r, 0.07, 6, 48), glow('#ffffff', 0.85)));
+      m.rotation.x = Math.PI / 2;
+      m.position.y = 0.12 + i * 0.04;
+      return m;
+    });
+    // 環繞的閃光：沿光柱螺旋往上
+    const N = 36;
+    const pos = new Float32Array(N * 3);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    this.showSparks = add(new THREE.Points(geo, new THREE.PointsMaterial({ color: '#fff4c2', size: 0.42, transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.AdditiveBlending })));
+    this.showSparkSeed = Array.from({ length: N }, (_, i) => ({ a: (i / N) * Math.PI * 2 * 3, h: (i / N) * 9, r: 1.4 + (i % 3) * 0.5 }));
+    g.visible = false;
+    this.scene.add(g);
+    this.showcaseGroup = g;
+    this.showAlpha = 0;
+  }
+
+  // id：島嶼；local：[x, 標籤高度, z, 地面高度]；color：島嶼主色
+  showcase(id, local, color) {
+    if (!this.showcaseGroup) this.buildShowcase();
+    const is = this.islands[id];
+    if (!is) return;
+    const g = this.showcaseGroup;
+    if (g.parent !== is.group) is.group.add(g);
+    const [x, , z, ground = 0] = local;
+    g.position.set(x, ground, z);
+    const c = new THREE.Color(color);
+    const light = c.clone().lerp(new THREE.Color('#ffffff'), 0.45);
+    this.showBeam.material.color.copy(c);
+    this.showCore.material.color.copy(light);
+    this.showRings.forEach((m, i) => m.material.color.copy(i ? c : light));
+    g.visible = true;
+    this.showAlpha = 0;
+    this.showAt = this.now || 0;
+    const p = new THREE.Vector3(x, ground + 1.5, z);
+    is.group.localToWorld(p);
+    // 地標附近的老師和同學轉向鏡頭，揮手跳起來歡迎
+    const cam = this.camera.position;
+    for (const q of this.people?.list || []) {
+      if (q.vis > 0.5 && Math.hypot(q.x - p.x, q.z - p.z) < 9) { q.greet = 1.6; q.greetYaw = Math.atan2(cam.x - q.x, cam.z - q.z); }
+    }
+    if (!this.hippoFx.calm) {
+      this.hippoFx.burst(p, 70, 6.5, 0.3);
+      setTimeout(() => this.hippoFx.burst(p.clone().setY(p.y + 3), 40, 5, 0.26), 450);
+    }
+  }
+
+  clearShowcase() {
+    this.showAt = null;
+  }
+
+  updateShowcase(t, dt) {
+    const g = this.showcaseGroup;
+    if (!g) return;
+    const on = this.showAt != null;
+    this.showAlpha += ((on ? 1 : 0) - this.showAlpha) * Math.min(1, dt * (on ? 3 : 5));
+    g.visible = this.showAlpha > 0.02;
+    if (!g.visible) return;
+    const a = this.showAlpha;
+    const since = on ? t - this.showAt : 9;
+    const rise = Math.min(1, since / 0.8); // 光柱從地面往上長
+    const pulse = 0.75 + Math.sin(t * 3.2) * 0.25;
+    this.showBeam.scale.set(1, rise, 1);
+    this.showBeam.position.y = 8 * rise;
+    this.showCore.scale.set(1, rise, 1);
+    this.showCore.position.y = 8 * rise;
+    this.showBeam.material.opacity = 0.28 * a * pulse;
+    this.showCore.material.opacity = 0.5 * a * pulse;
+    this.showBeam.rotation.y = t * 0.6;
+    this.showRings.forEach((m, i) => {
+      m.rotation.z = t * (i ? -1.1 : 0.8);
+      const s = 1 + Math.sin(t * 2.4 + i) * 0.08;
+      m.scale.set(s, s, s);
+      m.material.opacity = 0.85 * a;
+    });
+    const pos = this.showSparks.geometry.attributes.position;
+    this.showSparkSeed.forEach((sp, i) => {
+      const h = (sp.h + t * 1.6) % 9;
+      const ang = sp.a + t * 1.8 + h * 0.5;
+      const r = sp.r * (1 - h / 14);
+      pos.setXYZ(i, Math.cos(ang) * r, 0.3 + h * rise, Math.sin(ang) * r);
+    });
+    pos.needsUpdate = true;
+    this.showSparks.material.opacity = 0.95 * a;
+  }
+
+  // 鏡頭飛到島上的地標，比看整座島更近
+  focusSpot(id, local) {
+    const is = this.islands[id];
+    if (!is) return;
+    const [x, y, z] = local;
+    const tgt = new THREE.Vector3(x, Math.max(1.2, y * 0.55), z);
+    is.group.localToWorld(tgt);
+    const g = is.group.position;
+    const out = new THREE.Vector3(x, 0, z);
+    const heading = out.lengthSq() < 1 ? 0 : Math.atan2(x, z) * 0.35;
+    const dir = new THREE.Vector3(Math.sin(heading), 1.05, Math.cos(heading)).normalize(); // 偏俯視，比較不會被樹或浮石擋住
+    const dist = (this.width < this.height ? 17 : 12.5) + y * 0.5; // 拉近到看得清楚小場景
+    this.focused = id;
+    this.flyTo(tgt.clone().addScaledVector(dir, dist), tgt, 1.4);
+    return g;
+  }
+
   setPaused(v) { this.paused = v; }
 
   setTilt(v) { this.tilt = v; }
@@ -515,6 +631,7 @@ export class World {
     this.life.update(t, flow, wet);
     this.rainFish.update(t, flow, wet);
     this.hippoFx.update(t, dt);
+    this.updateShowcase(t, dt);
     this.people.update(t, this.paused ? 0 : dt, this.env, this.islands);
     this.earClock = (this.earClock || 0) - dt;
     if (this.earClock <= 0) {

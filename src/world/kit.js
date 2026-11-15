@@ -168,6 +168,13 @@ export class Kit {
     return this;
   }
 
+  // 登記卡片對應的地標位置：[x, 標籤高度, z, 地面高度]（島內座標），第二層選單用
+  mark(id, x, y, z, ground = 0) {
+    const pt = this.point(x, y, z), g = this.point(x, ground, z);
+    (this.marks ||= {})[id] = [pt.x, pt.y, pt.z, g.y];
+    return this;
+  }
+
   point(x, y, z) {
     return new THREE.Vector3(x, y, z).applyMatrix4(this.stack[this.stack.length - 1]);
   }

@@ -9,9 +9,10 @@ const BODY = {
   student: { hip: 0.34, leg: 1, tor: 1, head: 1, arm: 1 },
   teacher: { hip: 0.476, leg: 1.4, tor: 1.25, head: 0.85, arm: 1.25 },
 };
-const SHIRTS = ['#f2c230', '#fbf6ea', '#5ea85a', '#e8743b', '#4fa3d1', '#ef8fa3', '#f2c230', '#5ea85a'];
+// 學生大多穿白色、淺藍色制服上衣，也有人穿青綠色運動服；褲裙是深藍色
+const SHIRTS = ['#fbf8f0', '#cfe6f5', '#fbf8f0', '#3d8f8a', '#cfe6f5', '#fbf8f0', '#e9f2f7', '#3d8f8a'];
 const COATS = ['#2f6f8f', '#9c4f3a', '#4a6b4f', '#7a5a9c', '#b5563c'];
-const PANTS = ['#2f4a6b', '#3f5a4a', '#4a4560', '#2f6f53'];
+const PANTS = ['#26375a', '#2b3f66', '#1f2f4f', '#26375a'];
 const HAIR = ['#2a2118', '#3b2a1c', '#1f1a16', '#4a3524'];
 const PACKS = ['#d9432f', '#3d86c6', '#e3a73b', '#5a9b4e', '#a23f8f'];
 const SKIN = ['#ffffff', '#fff3ea', '#f4e2d0'];

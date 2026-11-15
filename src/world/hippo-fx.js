@@ -193,6 +193,10 @@ export class HippoFx {
     let hidden = 0;
     this.hippos.forEach((h, i) => {
       if (h.hop) this.updateHop(h, dt);
+      else {
+        h.mesh.scale.set(BASE, BASE * (1 + Math.sin(t * 2.2 + i) * 0.04), BASE);
+        h.mesh.rotation.z = Math.sin(t * 1.3 + i * 1.7) * 0.07;
+      }
       if (h.found) {
         const s = h.star.scale;
         const target = 1 + Math.sin(t * 2.4 + i) * 0.08;

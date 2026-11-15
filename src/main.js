@@ -9,7 +9,7 @@ import { ISLANDS, SCHOOL, HIPPOS } from './data/site.js';
 import { QUIZ } from './data/issues/18/quiz.js';
 import { drawCert, validNick } from './ui/fs-cert.js';
 import { countVisit, track } from './ui/visits.js';
-import { ISSUE, PHOTOS, piece } from './data/issues/18/index.js';
+import { ISSUE, PHOTOS, SPOTS, piece } from './data/issues/18/index.js';
 import { ruby } from './data/zhuyin.js';
 
 const $ = (s, r = document) => r.querySelector(s);
@@ -60,6 +60,7 @@ $('#app').innerHTML = `
     <button class="handle" data-act="tall" aria-label="展開或收合內容" aria-expanded="true"></button>
     <div class="ph-row"><button class="round" data-act="prev" aria-label="上一座島">‹</button><span class="kicker" id="pKicker"></span><strong class="peek-name" id="pPeek"></strong><button class="round" data-act="next" aria-label="下一座島">›</button><button class="round" data-act="close" aria-label="關閉">×</button></div>
     <h2 id="pTitle"></h2><p class="plain" id="pPlain"></p><p class="motto" id="pMotto"></p>
+    <nav class="fs-spots" id="pSpots" aria-label="島上的精彩地點"></nav>
   </div>
   <div class="panel-body" id="pBody"></div>
   <div class="panel-foot"><button data-act="prev" id="footPrev"></button><button data-act="next" id="footNext"></button></div>
@@ -138,8 +139,78 @@ function paintPlate(b, d) {
   b.innerHTML = `<span class="dot"></span><span class="pname">${zy(d.name)}</span><em>${esc(d.tag)}</em>${S.stamps.has(d.id) ? '<span class="pstamp" title="已拿到印章">✓</span>' : ''}`;
 }
 
+// ───────── 第二層選單：島上的編號地標 ─────────
+let pins = [];
+const spotOf = (card) => SPOTS[card.id];
+// 地標座標以島上實際登記的位置為準（小場景會避開吊橋而挪動），沒有登記才用 SPOTS 裡的備用座標
+const localOf = (id, card) => world?.islands[id]?.marks?.[card.id] || SPOTS[card.id]?.slice(1);
+
+function buildPins(id) {
+  clearPins();
+  const d = byId[id];
+  const box = $('#labels');
+  pins = cardsOf(id).map((c, i) => {
+    const sp = spotOf(c);
+    if (!sp) return null;
+    const b = document.createElement('button');
+    b.className = 'pin fs-pin';
+    b.style.setProperty('--c', d.color);
+    b.innerHTML = `<b>${i + 1}</b><span>${esc(sp[0])}</span>`;
+    b.title = `${sp[0]}：${c.title}`;
+    b.setAttribute('aria-label', `${i + 1}. ${sp[0]}：${c.title}`);
+    b.addEventListener('click', () => selectSpot(id, i));
+    box.appendChild(b);
+    return { el: b, island: id, local: localOf(id, c), i };
+  }).filter(Boolean);
+}
+
+function clearPins() { pins.forEach((p) => p.el.remove()); pins = []; S.spot = null; world?.clearShowcase(); }
+
+function paintSpots(id) {
+  const d = byId[id];
+  $('#pSpots').innerHTML = cardsOf(id).map((c, i) => SPOTS[c.id]
+    ? `<button data-act="spot" data-island="${id}" data-i="${i}" style="--c:${d.color}" title="${esc(SPOTS[c.id][0])}"><b>${i + 1}</b>${esc(c.title.split('：')[0])}</button>` : '').join('');
+}
+
+function markSpot(i) {
+  pins.forEach((p) => p.el.classList.toggle('on', p.i === i));
+  $$('#pSpots button').forEach((b) => b.classList.toggle('on', +b.dataset.i === i));
+  $('#pSpots button.on')?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: calm ? 'auto' : 'smooth' });
+}
+
+// 選一個地點：鏡頭飛過去、地標升起光柱與彩紙，面板打開對應卡片
+function selectSpot(id, i, { fromCard = false } = {}) {
+  const c = cardsOf(id)[i];
+  const sp = c && spotOf(c);
+  if (!sp) return;
+  S.spot = i;
+  markSpot(i);
+  // 先打開卡片（手機會把收合的面板拉起來），再飛向地標，鏡頭才不會被「看整座島」蓋掉
+  if (!fromCard) {
+    S.quietToggle = true;
+    goCard(id, c.id);
+    setTimeout(() => { S.quietToggle = false; }, 50);
+  }
+  if (world) {
+    const local = localOf(id, c);
+    world.focusSpot(id, local);
+    world.showcase(id, local, byId[id].color);
+  }
+  music.sfx('chime');
+}
+
 function onFrame(camera) {
   const W = innerWidth, H = innerHeight;
+  const small = isMobile();
+  for (const p of pins) {
+    v3.set(p.local[0], p.local[1], p.local[2]);
+    world.islands[p.island].group.localToWorld(v3);
+    v3.project(camera);
+    if (v3.z > 1) { p.el.style.visibility = 'hidden'; continue; }
+    p.el.style.visibility = '';
+    p.el.classList.toggle('small', small && p.i !== S.spot);
+    p.el.style.transform = `translate3d(${((v3.x * 0.5 + 0.5) * W).toFixed(1)}px,${((-v3.y * 0.5 + 0.5) * H).toFixed(1)}px,0) translate(-50%,-50%)`;
+  }
   for (const d of ISLANDS) {
     const g = world.islands[d.id].group.position;
     v3.set(g.x, g.y + (LABEL_Y[d.id] || 8), g.z).project(camera);
@@ -253,7 +324,12 @@ function goCard(id, card) {
 // 卡片打開就算讀過
 document.addEventListener('toggle', (e) => {
   const el = e.target;
-  if (el.matches?.('.fs-card') && el.open) markRead(el.dataset.island, el.dataset.card);
+  if (!el.matches?.('.fs-card') || !el.open) return;
+  markRead(el.dataset.island, el.dataset.card);
+  if (!S.listing && !S.quietToggle && el.dataset.island === S.island) {
+    const i = cardsOf(S.island).findIndex((c) => c.id === el.dataset.card);
+    if (i >= 0 && i !== S.spot) selectSpot(S.island, i, { fromCard: true });
+  }
 }, true);
 
 // ───────── 藏起來的福星龍 ─────────
@@ -366,6 +442,9 @@ function openIsland(id, { fly = true, push = true } = {}) {
   $('#pPeek').textContent = d.name;
   $('#pPlain').innerHTML = zy(d.plain);
   $('#pMotto').textContent = d.motto;
+  paintSpots(id);
+  S.quietToggle = true; // 剛畫出來的第一張卡片是自動打開的，不觸發舞台秀
+  setTimeout(() => { S.quietToggle = false; }, 80);
   $('#pBody').innerHTML = `<p class="fs-tour">${esc(d.tour)}</p>${cardsOf(id).map((c, i) => cardHtml(c, i, id)).join('')}<section class="fs-quiz" data-quiz="${id}"></section>`;
   markRead(id, cardsOf(id)[0]?.id);
   paintQuiz();
@@ -381,6 +460,7 @@ function openIsland(id, { fly = true, push = true } = {}) {
   if (world) {
     if (fly) world.focusIsland(id);
     world.setHoverRing(null);
+    buildPins(id);
   }
   if (push && location.hash !== `#/${d.slug}`) history.pushState(null, '', `#/${d.slug}`);
   music.sfx('whoosh');
@@ -397,6 +477,7 @@ function closeIsland(push = true) {
   $('#panel').setAttribute('aria-hidden', 'true');
   $('#hint').hidden = false;
   Object.values(plates).forEach((p) => p.classList.remove('off'));
+  clearPins();
   world?.clearFocus();
   world?.setView('home');
   syncView('home');
@@ -421,8 +502,12 @@ window.addEventListener('resize', updateInset);
 function onSheet(state, prev) {
   updateInset();
   if (!world || !S.island) return;
+  const spotCard = S.spot != null ? cardsOf(S.island)[S.spot] : null;
   if (state === 'peek') world.focusIsland(S.island, true);
-  else if (prev === 'peek') world.focusIsland(S.island);
+  else if (prev === 'peek') {
+    if (spotCard) world.focusSpot(S.island, localOf(S.island, spotCard)); // 有選中的地標就繼續看著它
+    else world.focusIsland(S.island);
+  }
 }
 
 // ───────── 檢視模式與清單 ─────────
@@ -493,6 +578,7 @@ const actions = {
     if (S.listing) renderList();
   },
   photo: (el) => showPhoto(el.dataset.photo),
+  spot: (el) => selectSpot(el.dataset.island, +el.dataset.i),
   answer: (el) => answer(el.dataset.island, +el.dataset.i),
   goCard: (el) => goCard(el.dataset.island, el.dataset.card),
   goIsland: (el) => { closeModal(); openIsland(el.dataset.island); },

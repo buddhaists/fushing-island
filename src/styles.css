@@ -911,3 +911,15 @@ a.cta { text-decoration: none; display: inline-flex; align-items: center; }
 .brand .visit-line[hidden], .site-footer .visit-line[hidden] { display: none; }
 
 .site-footer .fs-privacy { margin-top: 6px; font-size: var(--fs-xs); color: var(--ink-3); line-height: 1.6; }
+
+/* ───── 第二層選單：島上的編號地標與面板上的編號按鈕 ───── */
+.fs-pin { z-index: 2; transition: background-color .2s, color .2s, transform .05s; }
+.fs-pin.on { box-shadow: 0 0 0 4px color-mix(in srgb, var(--c) 35%, transparent), 0 6px 14px -4px rgba(40, 26, 10, .6); z-index: 3; }
+.fs-pin.small { padding: 3px; }
+.fs-pin.small span { display: none; }
+.fs-spots { display: flex; gap: 6px; overflow-x: auto; padding: 10px 0 10px; margin-top: 4px; scrollbar-width: thin; }
+.fs-spots:empty { display: none; }
+.fs-spots button { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px 4px 4px; border-radius: 99px; background: #fff; border: 1.5px solid color-mix(in srgb, var(--c) 40%, transparent); font-size: var(--fs-xs); font-weight: 700; white-space: nowrap; }
+.fs-spots button b { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--c); color: #fff; font-size: .78rem; }
+.fs-spots button:hover, .fs-spots button.on { background: var(--c); color: #fff; }
+.fs-spots button:hover b, .fs-spots button.on b { background: #fff; color: var(--c); }
